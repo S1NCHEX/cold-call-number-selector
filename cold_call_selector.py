@@ -427,7 +427,6 @@ if st.button("Find Best Numbers"):
 
 st.divider()
 
-# ----------------------------- Timezone Comparison (EST anchor) -----------------------------#
 from timezonefinder import TimezoneFinder
 from geopy.geocoders import Nominatim
 
@@ -451,32 +450,28 @@ def _time_range_to_hours(est_start, est_end, step_minutes):
 # ----------------------------- Timezone Comparison (EST anchor) -----------------------------
 st.header("🕑 Timezone comparison (EST anchor)")
 
-with st.expander("Show timezone tables", expanded=True):  # 👈 expanded=True means it's open by default
+with st.expander("Show timezone tables", expanded=True):
+
+    # --- City input and detection ---
     location_input = st.text_input("Enter any city or state (US, Canada, UK, Australia):", value="New York")
+    detected_tzname = None
+    detected_label = None
 
     try:
-        # Geolocate and detect timezone automatically
         loc = geolocator.geocode(location_input)
         if loc:
             tzname = tf.timezone_at(lat=loc.latitude, lng=loc.longitude)
             if tzname:
-                st.success(f"Detected timezone for **{location_input.title()}**: `{tzname}`")
-
-                est_start = st.time_input("EST start time", value=pd.to_datetime("09:00").time())
-                est_end = st.time_input("EST end time", value=pd.to_datetime("16:00").time())
-                step_minutes = st.number_input("Step (minutes)", value=60, min_value=15, max_value=180, step=15)
-
-                times = _time_range_to_hours(est_start, est_end, step_minutes)
-
-                # Build table
-                table_rows = []
-                for est_dt in times:
-                    local_dt = est_dt.astimezone(ZoneInfo(tzname))
-                    row = [est_dt.strftime("%-I:%M %p"), local_dt.strftime("%-I:%M %p")]
-                    table_rows.append(row)
-
-                tz_df = pd.DataFrame(table_rows, columns=["EST", f"{location_input.title()} Time"])
-                st.dataframe(tz_df, use_container_width=True)
+                detected_tzname = tzname
+                # Try to find which known group this timezone belongs to
+                for region, zones in TZ_GROUPS.items():
+                    for label, tz in zones:
+                        if tz == tzname:
+                            detected_label = label
+                            break
+                if not detected_label:
+                    detected_label = tzname.split("/")[-1].replace("_", " ")
+                st.success(f"**{location_input.title()}** is in timezone: `{tzname}` ({detected_label})")
             else:
                 st.error("Could not determine timezone for that location.")
         else:
@@ -484,6 +479,32 @@ with st.expander("Show timezone tables", expanded=True):  # 👈 expanded=True m
     except Exception as e:
         st.error(f"Error: {e}")
 
-st.caption("Developed for NSR Cold Calling Agent – Streamlit edition.")
+    # --- Full timezone comparison table (always visible) ---
+    est_start = st.time_input("EST start time", value=pd.to_datetime("09:00").time())
+    est_end = st.time_input("EST end time", value=pd.to_datetime("16:00").time())
+    step_minutes = st.number_input("Step (minutes)", value=60, min_value=15, max_value=180, step=15)
+
+    times = _time_range_to_hours(est_start, est_end, step_minutes)
+
+    # Collect all columns across USA, Canada, UK, Australia
+    all_labels = []
+    for group in TZ_GROUPS.values():
+        for label, _ in group:
+            if label not in all_labels:
+                all_labels.append(label)
+
+    cols = ["EST"] + all_labels
+    table_rows = []
+    for est_dt in times:
+        row = [est_dt.strftime("%-I:%M %p")]
+        for region in TZ_GROUPS.values():
+            for _, tzname in region:
+                loc_dt = est_dt.astimezone(ZoneInfo(tzname))
+                row.append(loc_dt.strftime("%-I:%M %p"))
+        table_rows.append(row)
+
+    tz_df = pd.DataFrame(table_rows, columns=cols)
+    st.dataframe(tz_df, use_container_width=True)
+    st.caption("Tip: The full timezone table is always visible. Enter a city above to detect its timezone automatically.")
 
 st.caption("Developed for NSR Cold Calling Agent – Streamlit edition.")
