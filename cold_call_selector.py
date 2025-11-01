@@ -431,43 +431,59 @@ st.divider()
 from timezonefinder import TimezoneFinder
 from geopy.geocoders import Nominatim
 
+# Initialize timezone and geolocation tools
 geolocator = Nominatim(user_agent="cold_call_timezone")
 tf = TimezoneFinder()
 
+# Helper function to build EST time range
+def _time_range_to_hours(est_start, est_end, step_minutes):
+    est_tz = ZoneInfo("America/New_York")
+    today = datetime.now(est_tz).date()
+    start_dt = datetime.combine(today, est_start, tzinfo=est_tz)
+    end_dt = datetime.combine(today, est_end, tzinfo=est_tz)
+    times = []
+    cur = start_dt
+    while cur <= end_dt:
+        times.append(cur)
+        cur += timedelta(minutes=int(step_minutes))
+    return times
+
+# ----------------------------- Timezone Comparison (EST anchor) -----------------------------
 st.header("🕑 Timezone comparison (EST anchor)")
 
-with st.expander("Show timezone tables"):
-    location_input = st.text_input("Enter any city or state (US, Canada, UK, Australia):")
+with st.expander("Show timezone tables", expanded=True):  # 👈 expanded=True means it's open by default
+    location_input = st.text_input("Enter any city or state (US, Canada, UK, Australia):", value="New York")
 
-    if location_input:
-        try:
-            loc = geolocator.geocode(location_input)
-            if loc:
-                tzname = tf.timezone_at(lat=loc.latitude, lng=loc.longitude)
-                if tzname:
-                    st.success(f"Detected timezone for **{location_input.title()}**: `{tzname}`")
+    try:
+        # Geolocate and detect timezone automatically
+        loc = geolocator.geocode(location_input)
+        if loc:
+            tzname = tf.timezone_at(lat=loc.latitude, lng=loc.longitude)
+            if tzname:
+                st.success(f"Detected timezone for **{location_input.title()}**: `{tzname}`")
 
-                    est_start = st.time_input("EST start time", value=pd.to_datetime("09:00").time())
-                    est_end = st.time_input("EST end time", value=pd.to_datetime("16:00").time())
-                    step_minutes = st.number_input("Step (minutes)", value=60, min_value=15, max_value=180, step=15)
+                est_start = st.time_input("EST start time", value=pd.to_datetime("09:00").time())
+                est_end = st.time_input("EST end time", value=pd.to_datetime("16:00").time())
+                step_minutes = st.number_input("Step (minutes)", value=60, min_value=15, max_value=180, step=15)
 
-                    # Generate time range
-                    times = _time_range_to_hours(est_start, est_end, step_minutes)
+                times = _time_range_to_hours(est_start, est_end, step_minutes)
 
-                    # Build table
-                    table_rows = []
-                    for est_dt in times:
-                        local_dt = est_dt.astimezone(ZoneInfo(tzname))
-                        row = [est_dt.strftime("%-I:%M %p"), local_dt.strftime("%-I:%M %p")]
-                        table_rows.append(row)
+                # Build table
+                table_rows = []
+                for est_dt in times:
+                    local_dt = est_dt.astimezone(ZoneInfo(tzname))
+                    row = [est_dt.strftime("%-I:%M %p"), local_dt.strftime("%-I:%M %p")]
+                    table_rows.append(row)
 
-                    tz_df = pd.DataFrame(table_rows, columns=["EST", f"{location_input.title()} Time"])
-                    st.dataframe(tz_df, use_container_width=True)
-                else:
-                    st.error("Could not determine timezone for that location.")
+                tz_df = pd.DataFrame(table_rows, columns=["EST", f"{location_input.title()} Time"])
+                st.dataframe(tz_df, use_container_width=True)
             else:
-                st.error("Could not find that city or state. Please try again.")
-        except Exception as e:
-            st.error(f"Error: {e}")
+                st.error("Could not determine timezone for that location.")
+        else:
+            st.error("Could not find that city or state. Please try again.")
+    except Exception as e:
+        st.error(f"Error: {e}")
+
+st.caption("Developed for NSR Cold Calling Agent – Streamlit edition.")
 
 st.caption("Developed for NSR Cold Calling Agent – Streamlit edition.")
