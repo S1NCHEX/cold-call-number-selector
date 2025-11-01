@@ -427,46 +427,47 @@ if st.button("Find Best Numbers"):
 
 st.divider()
 
-# ----------------------------- Timezone Comparison (EST anchor) -----------------------------
+# ----------------------------- Timezone Comparison (EST anchor) -----------------------------#
+from timezonefinder import TimezoneFinder
+from geopy.geocoders import Nominatim
+
+geolocator = Nominatim(user_agent="cold_call_timezone")
+tf = TimezoneFinder()
+
 st.header("🕑 Timezone comparison (EST anchor)")
 
 with st.expander("Show timezone tables"):
-    region = st.selectbox(
-        "Choose a region to compare with EST:",
-        options=list(TZ_GROUPS.keys()),
-        index=0,
-        help="EST is the constant anchor. Tables show local times corresponding to the selected EST hours."
-    )
-    est_start = st.time_input("EST start time", value=pd.to_datetime("09:00").time())
-    est_end = st.time_input("EST end time", value=pd.to_datetime("16:00").time())
-    step_minutes = st.number_input("Step (minutes)", value=60, min_value=15, max_value=180, step=15)
+    location_input = st.text_input("Enter any city or state (US, Canada, UK, Australia):")
 
-    # Build list of hours/minutes between start and end (inclusive of start)
-    def _time_range_to_hours(est_start, est_end, step_minutes):
-        est_tz = ZoneInfo("America/New_York")
-        today = datetime.now(est_tz).date()
-        start_dt = datetime.combine(today, est_start, tzinfo=est_tz)
-        end_dt = datetime.combine(today, est_end, tzinfo=est_tz)
-        times = []
-        cur = start_dt
-        while cur <= end_dt:
-            times.append(cur)
-            cur += timedelta(minutes=int(step_minutes))
-        return times
+    if location_input:
+        try:
+            loc = geolocator.geocode(location_input)
+            if loc:
+                tzname = tf.timezone_at(lat=loc.latitude, lng=loc.longitude)
+                if tzname:
+                    st.success(f"Detected timezone for **{location_input.title()}**: `{tzname}`")
 
-    times = _time_range_to_hours(est_start, est_end, step_minutes)
+                    est_start = st.time_input("EST start time", value=pd.to_datetime("09:00").time())
+                    est_end = st.time_input("EST end time", value=pd.to_datetime("16:00").time())
+                    step_minutes = st.number_input("Step (minutes)", value=60, min_value=15, max_value=180, step=15)
 
-    # Render table similar to your screenshot
-    cols = ["EST"] + [label for (label, _) in TZ_GROUPS[region]]
-    table_rows = []
-    for est_dt in times:
-        row = [est_dt.strftime("%-I:%M %p")]
-        for _, tzname in TZ_GROUPS[region]:
-            row.append(est_dt.astimezone(ZoneInfo(tzname)).strftime("%-I:%M %p"))
-        table_rows.append(row)
+                    # Generate time range
+                    times = _time_range_to_hours(est_start, est_end, step_minutes)
 
-    tz_df = pd.DataFrame(table_rows, columns=cols)
-    st.dataframe(tz_df, use_container_width=True)
-    st.caption("Tip: adjust the start/end and step to mirror your scheduling window.")
+                    # Build table
+                    table_rows = []
+                    for est_dt in times:
+                        local_dt = est_dt.astimezone(ZoneInfo(tzname))
+                        row = [est_dt.strftime("%-I:%M %p"), local_dt.strftime("%-I:%M %p")]
+                        table_rows.append(row)
+
+                    tz_df = pd.DataFrame(table_rows, columns=["EST", f"{location_input.title()} Time"])
+                    st.dataframe(tz_df, use_container_width=True)
+                else:
+                    st.error("Could not determine timezone for that location.")
+            else:
+                st.error("Could not find that city or state. Please try again.")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 st.caption("Developed for NSR Cold Calling Agent – Streamlit edition.")
