@@ -467,7 +467,7 @@ with st.expander("Show timezone tables", expanded=True):
                 for region, zones in TZ_GROUPS.items():
                     for label, tz in zones:
                         if tz == tzname:
-                            detected_label = label
+                            detected_label = f"{label} [{region}]"
                             break
                 if not detected_label:
                     detected_label = tzname.split("/")[-1].replace("_", " ")
@@ -486,27 +486,30 @@ with st.expander("Show timezone tables", expanded=True):
 
     times = _time_range_to_hours(est_start, est_end, step_minutes)
 
-    # Collect all unique timezones and labels
-    tz_columns = [("Eastern (EST/EDT)", "America/New_York")]
-    for region in TZ_GROUPS.values():
-        for label, tzname in region:
-            if tzname not in [t for _, t in tz_columns]:
-                tz_columns.append((label, tzname))
+    # Collect all unique timezone labels, deduping where needed
+    tz_columns = [("Eastern (EST/EDT) [US]", "America/New_York")]
+    seen_labels = set(["Eastern (EST/EDT) [US]"])
+
+    for region, zones in TZ_GROUPS.items():
+        for label, tzname in zones:
+            # Append region tag if label already exists
+            new_label = label if label not in seen_labels else f"{label} [{region}]"
+            seen_labels.add(new_label)
+            tz_columns.append((new_label, tzname))
 
     # Build table rows
     table_rows = []
     for est_dt in times:
         row = [est_dt.strftime("%-I:%M %p")]
-        for _, tzname in tz_columns[1:]:  # skip the first (EST) since it's already anchor
+        for _, tzname in tz_columns[1:]:  # skip first (EST anchor)
             loc_dt = est_dt.astimezone(ZoneInfo(tzname))
             row.append(loc_dt.strftime("%-I:%M %p"))
         table_rows.append(row)
 
-    # Build dataframe (columns line up perfectly now)
+    # Final dataframe with unique column names
     col_names = [label for label, _ in tz_columns]
     tz_df = pd.DataFrame(table_rows, columns=col_names)
     st.dataframe(tz_df, use_container_width=True)
     st.caption("Tip: The full timezone table is always visible. Enter a city above to detect its timezone automatically.")
 
 st.caption("Developed for NSR Cold Calling Agent – Streamlit edition.")
-
