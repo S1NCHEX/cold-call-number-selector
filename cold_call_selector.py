@@ -486,24 +486,25 @@ with st.expander("Show timezone tables", expanded=True):
 
     times = _time_range_to_hours(est_start, est_end, step_minutes)
 
-    # Collect all columns across USA, Canada, UK, Australia
-    all_labels = []
-    for group in TZ_GROUPS.values():
-        for label, _ in group:
-            if label not in all_labels:
-                all_labels.append(label)
+    # Collect all unique timezones and labels
+    tz_columns = [("Eastern (EST/EDT)", "America/New_York")]
+    for region in TZ_GROUPS.values():
+        for label, tzname in region:
+            if tzname not in [t for _, t in tz_columns]:
+                tz_columns.append((label, tzname))
 
-    cols = ["EST"] + all_labels
+    # Build table rows
     table_rows = []
     for est_dt in times:
         row = [est_dt.strftime("%-I:%M %p")]
-        for region in TZ_GROUPS.values():
-            for _, tzname in region:
-                loc_dt = est_dt.astimezone(ZoneInfo(tzname))
-                row.append(loc_dt.strftime("%-I:%M %p"))
+        for _, tzname in tz_columns[1:]:  # skip the first (EST) since it's already anchor
+            loc_dt = est_dt.astimezone(ZoneInfo(tzname))
+            row.append(loc_dt.strftime("%-I:%M %p"))
         table_rows.append(row)
 
-    tz_df = pd.DataFrame(table_rows, columns=cols)
+    # Build dataframe (columns line up perfectly now)
+    col_names = [label for label, _ in tz_columns]
+    tz_df = pd.DataFrame(table_rows, columns=col_names)
     st.dataframe(tz_df, use_container_width=True)
     st.caption("Tip: The full timezone table is always visible. Enter a city above to detect its timezone automatically.")
 
