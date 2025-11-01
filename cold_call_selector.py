@@ -509,3 +509,4 @@ with st.expander("Show timezone tables", expanded=True):
     st.caption("Tip: The full timezone table is always visible. Enter a city above to detect its timezone automatically.")
 
 st.caption("Developed for NSR Cold Calling Agent – Streamlit edition.")
+
